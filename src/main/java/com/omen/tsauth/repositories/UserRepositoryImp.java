@@ -4,6 +4,7 @@ package com.omen.tsauth.repositories;
 import com.omen.tsauth.domain.User;
 import com.omen.tsauth.exceptions.AuthException;
 
+import org.mindrot.jbcrypt.BCrypt;
 //import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -31,7 +32,9 @@ public class UserRepositoryImp implements UserRepository {
 
     @Override
     public Integer create(String firstName, String lastName, String email, String password) throws AuthException {
-        //String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(10));
+        // combine password value with salt so the hash will be different for
+        // same passwords
+        String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(10));
         try {
             KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbcTemplate.update(connection -> {
@@ -39,7 +42,7 @@ public class UserRepositoryImp implements UserRepository {
                 ps.setString(1, firstName);
                 ps.setString(2, lastName);
                 ps.setString(3, email);
-                ps.setString(4, password);
+                ps.setString(4, hashedPassword);
                 return ps;
             }, keyHolder);
             return (Integer) keyHolder.getKeys().get("USER_ID");
@@ -52,7 +55,7 @@ public class UserRepositoryImp implements UserRepository {
     public User findByEmailAndPassword(String email, String password) throws AuthException {
         try {
             User user = jdbcTemplate.queryForObject(SQL_FIND_BY_EMAIL, new Object[]{email}, userRowMapper);
-            if(!password.equals(user.getPassword()))
+            if(!BCrypt.checkpw(password, user.getPassword()))
                 throw new AuthException("Invalid email/password");
             return user;
         }catch (EmptyResultDataAccessException e) {
